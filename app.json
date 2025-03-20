@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "my-new-project",
+    "name": "Nuumi",
     "slug": "my-new-project",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,13 +13,18 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.clbmque.mynewproject",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.clbmque.mynewproject"
     },
     "web": {
       "favicon": "./assets/icon.png"
@@ -28,6 +33,12 @@
       "eas": {
         "projectId": "0662bab5-3474-4929-aaf6-d24c2f5a201e"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/0662bab5-3474-4929-aaf6-d24c2f5a201e"
     }
   }
 }

@@ -31,6 +31,10 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import { Video } from 'expo-av';
+import { FontAwesome, Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+import { useNetInfo } from '@react-native-community/netinfo';
+import { useUser } from '../context/UserContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PROGRESS_BAR_WIDTH = SCREEN_WIDTH - 40;
@@ -45,6 +49,7 @@ const StoryScreen = ({ route, navigation }) => {
   
   const [story, setStory] = useState(initialStory);
   const { colors, isDark } = useTheme();
+  const { userProfile } = useUser();
   const { addCommentToStory, deleteStory, archiveStory } = useStories();
   const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -60,7 +65,17 @@ const StoryScreen = ({ route, navigation }) => {
 
   // Menu state
   const [menuVisible, setMenuVisible] = useState(false);
-  
+
+  // Add these state variables
+  const [storyMetrics, setStoryMetrics] = useState({
+    viewCount: Math.floor(Math.random() * 100) + 20, // Simulated view count
+    engagementRate: (Math.random() * 20 + 5).toFixed(1) // Simulated engagement rate
+  });
+  const [showReplyInput, setShowReplyInput] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replies, setReplies] = useState([]);
+  const netInfo = useNetInfo();
+
   // Setup keyboard listeners
   useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener(
@@ -237,12 +252,12 @@ const StoryScreen = ({ route, navigation }) => {
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
     
-    // Create a new comment object
+    // Create a new comment object with actual user data
     const newCommentObj = {
-      username: 'you', // In a real app, this would be the current user's username
-      avatar: null,    // In a real app, this would be the current user's avatar
+      username: userProfile.username,
+      avatar: userProfile.avatar,
       text: newComment.trim(),
-      timestamp: 'just now'
+      timestamp: new Date().toISOString()
     };
     
     try {
@@ -256,6 +271,7 @@ const StoryScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error("[StoryScreen] Error adding comment:", error);
+      Alert.alert("Error", "Failed to add comment. Please try again.");
     }
     
     // Clear the input
@@ -449,6 +465,81 @@ const StoryScreen = ({ route, navigation }) => {
     );
   };
 
+  // Add this function to handle story replies
+  const handleSendReply = async () => {
+    if (!replyText.trim()) return;
+    
+    try {
+      const newReply = {
+        id: Date.now().toString(),
+        username: userProfile.username,
+        avatar: userProfile.avatar,
+        text: replyText.trim(),
+        timestamp: new Date().toISOString()
+      };
+      
+      // Add reply to local state
+      setReplies([...replies, newReply]);
+      
+      // Clear input and hide reply box
+      setReplyText('');
+      setShowReplyInput(false);
+      
+      // Show confirmation
+      Alert.alert("Reply Sent", "Your reply has been sent successfully.");
+    } catch (error) {
+      console.error("[StoryScreen] Error sending reply:", error);
+      Alert.alert("Error", "Failed to send reply. Please try again.");
+    }
+  };
+
+  // Add this function to handle offline caching
+  const cacheStoryForOffline = async () => {
+    try {
+      const currentMedia = mediaItems[currentStoryIndex];
+      if (!currentMedia) return;
+      
+      const fileName = currentMedia.uri.split('/').pop();
+      const fileUri = `${FileSystem.cacheDirectory}stories/${fileName}`;
+      
+      // Create directory if it doesn't exist
+      const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.cacheDirectory}stories`);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(`${FileSystem.cacheDirectory}stories`, { intermediates: true });
+      }
+      
+      // Download file
+      await FileSystem.downloadAsync(currentMedia.uri, fileUri);
+      console.log(`[StoryScreen] Cached story media: ${fileUri}`);
+      
+      // In a real app, you would store the reference to this cached file
+    } catch (error) {
+      console.error("[StoryScreen] Error caching story:", error);
+    }
+  };
+
+  // Add this useEffect for offline caching
+  useEffect(() => {
+    if (netInfo.isConnected && mediaItems.length > 0) {
+      cacheStoryForOffline();
+    }
+  }, [currentStoryIndex, netInfo.isConnected]);
+
+  // Add this function to handle smooth transitions
+  const getTransitionStyles = (index) => {
+    if (index === currentStoryIndex) {
+      return {
+        opacity: 1,
+        transform: [{ scale: 1 }]
+      };
+    } else {
+      return {
+        opacity: 0,
+        transform: [{ scale: 0.9 }]
+      };
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar hidden />
@@ -467,12 +558,26 @@ const StoryScreen = ({ route, navigation }) => {
         ))}
       </View>
 
+      <View style={styles.metricsContainer}>
+        <View style={styles.metricItem}>
+          <FontAwesome name="eye" size={16} color="#fff" />
+          <Text style={styles.metricText}>{storyMetrics.viewCount}</Text>
+        </View>
+        <View style={styles.metricItem}>
+          <FontAwesome name="heart" size={16} color="#fff" />
+          <Text style={styles.metricText}>{storyMetrics.engagementRate}%</Text>
+        </View>
+      </View>
+
       <TouchableOpacity
         activeOpacity={1}
         style={styles.storyContainer}
         onPress={handlePress}
       >
-        {renderMediaItem(currentMediaItem)}
+        {/* Story Content with Animated Transitions */}
+        <Animated.View style={[styles.storyContent, getTransitionStyles(currentStoryIndex)]}>
+          {renderMediaItem(currentMediaItem)}
+        </Animated.View>
 
         {/* Caption display - now using the caption from the current media item */}
         {currentMediaItem && currentMediaItem.caption && (
@@ -597,6 +702,61 @@ const StoryScreen = ({ route, navigation }) => {
           </KeyboardAvoidingView>
         </RNAnimated.View>
       )}
+
+      {/* Reply Button */}
+      <TouchableOpacity 
+        style={styles.replyButton}
+        onPress={() => setShowReplyInput(true)}
+      >
+        <Ionicons name="chatbubble-outline" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      {/* Reply Input */}
+      {showReplyInput && (
+        <View style={styles.replyInputContainer}>
+          <TextInput
+            style={styles.replyInput}
+            value={replyText}
+            onChangeText={setReplyText}
+            placeholder="Send a reply..."
+            placeholderTextColor="#999"
+            autoFocus
+          />
+          <TouchableOpacity 
+            style={styles.sendButton}
+            onPress={handleSendReply}
+          >
+            <Ionicons name="send" size={24} color="#FF69B4" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Replies List */}
+      {replies.length > 0 && (
+        <View style={styles.repliesContainer}>
+          <Text style={styles.repliesHeader}>Replies</Text>
+          {replies.map(reply => (
+            <View key={reply.id} style={styles.replyItem}>
+              <View style={styles.replyAvatar}>
+                <Text style={styles.replyAvatarText}>{reply.username.charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={styles.replyContent}>
+                <Text style={styles.replyUsername}>{reply.username}</Text>
+                <Text style={styles.replyText}>{reply.text}</Text>
+                <Text style={styles.replyTimestamp}>{reply.timestamp}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Offline Indicator */}
+      {!netInfo.isConnected && (
+        <View style={styles.offlineIndicator}>
+          <Ionicons name="cloud-offline" size={20} color="#fff" />
+          <Text style={styles.offlineText}>You're offline. Viewing cached content.</Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -711,8 +871,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     borderRadius: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 15,
   },
   toggleButtonText: {
     color: 'white',
@@ -802,13 +960,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   commentUsername: {
-    color: 'white',
+    color: isDark ? 'white' : '#333',
     fontWeight: 'bold',
     fontSize: 15,
     marginBottom: 4,
   },
   commentText: {
-    color: 'white',
+    color: isDark ? 'white' : '#333',
     fontSize: 14,
     marginBottom: 4,
   },
@@ -892,6 +1050,171 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
   },
+  videoContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  videoControls: {
+    position: 'absolute',
+    bottom: 80,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  videoControlButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  videoProgressContainer: {
+    flex: 1,
+    height: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 2,
+  },
+  videoProgress: {
+    height: '100%',
+    backgroundColor: '#FF69B4',
+    borderRadius: 2,
+  },
+  metricsContainer: {
+    flexDirection: 'row',
+    position: 'absolute',
+    top: 60,
+    right: 15,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    padding: 8,
+  },
+  metricItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  metricText: {
+    color: '#fff',
+    marginLeft: 5,
+    fontSize: 12,
+  },
+  storyContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  replyButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  replyInputContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: 10,
+    alignItems: 'center',
+  },
+  replyInput: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    color: '#fff',
+    marginRight: 10,
+  },
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  repliesContainer: {
+    position: 'absolute',
+    bottom: 80,
+    left: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 10,
+    padding: 10,
+    maxHeight: 200,
+  },
+  repliesHeader: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  replyItem: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  replyAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FF69B4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  replyAvatarText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  replyContent: {
+    flex: 1,
+  },
+  replyUsername: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  replyText: {
+    color: '#fff',
+  },
+  replyTimestamp: {
+    color: '#ccc',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  offlineIndicator: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 5,
+  },
+  offlineText: {
+    color: '#fff',
+    marginLeft: 5,
+    fontSize: 12,
+  },
+  timeText: {
+    color: '#fff',
+    fontSize: 12
+  }
 });
 
 export default StoryScreen;

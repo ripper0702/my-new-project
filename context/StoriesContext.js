@@ -437,12 +437,100 @@ export const StoriesProvider = ({ children }) => {
     }
   };
 
+  // Add this function to handle story replies
+  const addReplyToStory = async (storyId, reply) => {
+    try {
+      console.log("[StoriesContext] Adding reply to story:", storyId);
+      console.log("[StoriesContext] Reply data:", JSON.stringify(reply, null, 2));
+      
+      // Find the story by ID
+      const storyIndex = stories.findIndex(story => story.id === storyId);
+      
+      if (storyIndex === -1) {
+        console.error("[StoriesContext] Story not found with ID:", storyId);
+        return null;
+      }
+      
+      // Create a deep copy of the stories array to avoid mutation issues
+      const updatedStories = JSON.parse(JSON.stringify(stories));
+      
+      // Initialize replies array if it doesn't exist
+      if (!updatedStories[storyIndex].replies) {
+        updatedStories[storyIndex].replies = [];
+      }
+      
+      // Add the new reply
+      updatedStories[storyIndex].replies.push({
+        id: Date.now().toString(),
+        username: reply.username || userProfile.username,
+        avatar: reply.avatar || userProfile.avatar,
+        text: reply.text,
+        timestamp: reply.timestamp || new Date().toISOString()
+      });
+      
+      // Update state and storage
+      setStories(updatedStories);
+      await AsyncStorage.setItem('stories', JSON.stringify(updatedStories));
+      
+      return updatedStories[storyIndex];
+    } catch (error) {
+      console.error('[StoriesContext] Error adding reply to story:', error);
+      throw error;
+    }
+  };
+
+  // Add this function to track story views
+  const viewStory = async (storyId) => {
+    try {
+      console.log("[StoriesContext] Viewing story:", storyId);
+      
+      // Find the story by ID
+      const storyIndex = stories.findIndex(story => story.id === storyId);
+      
+      if (storyIndex === -1) {
+        console.error("[StoriesContext] Story not found with ID:", storyId);
+        return null;
+      }
+      
+      // Create a deep copy of the stories array
+      const updatedStories = JSON.parse(JSON.stringify(stories));
+      
+      // Initialize viewCount if it doesn't exist
+      if (!updatedStories[storyIndex].viewCount) {
+        updatedStories[storyIndex].viewCount = 0;
+      }
+      
+      // Increment view count
+      updatedStories[storyIndex].viewCount += 1;
+      
+      // Add current user to viewers if not already there
+      if (!updatedStories[storyIndex].viewers.some(viewer => viewer.username === userProfile.username)) {
+        updatedStories[storyIndex].viewers.push({
+          username: userProfile.username,
+          avatar: userProfile.avatar,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // Update state and storage
+      setStories(updatedStories);
+      await AsyncStorage.setItem('stories', JSON.stringify(updatedStories));
+      
+      return updatedStories[storyIndex];
+    } catch (error) {
+      console.error('[StoriesContext] Error tracking story view:', error);
+      throw error;
+    }
+  };
+
   const value = {
     stories,
     highlights,
     archivedStories,
     addStory,
     addCommentToStory,
+    addReplyToStory,
+    viewStory,
     saveStory,
     archiveStory,
     deleteStory,
@@ -465,3 +553,4 @@ export const useStories = () => {
   }
   return context;
 };
+
