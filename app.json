@@ -27,16 +27,21 @@
       "package": "com.clbmque.mynewproject"
     },
     "web": {
-      "favicon": "./assets/icon.png"
+      "favicon": "./assets/icon.png",
+      "bundler": "webpack",
+      "output": "static",
+      "build": {
+        "babel": {
+          "include": ["@expo/vector-icons"]
+        }
+      }
     },
     "extra": {
       "eas": {
         "projectId": "0662bab5-3474-4929-aaf6-d24c2f5a201e"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/0662bab5-3474-4929-aaf6-d24c2f5a201e"
     }

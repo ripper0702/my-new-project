@@ -13,6 +13,11 @@
     },
     "production": {
       "autoIncrement": true
+    },
+    "web": {
+      "env": {
+        "EXPO_ROUTER_APP_ROOT": "."
+      }
     }
   },
   "submit": {
